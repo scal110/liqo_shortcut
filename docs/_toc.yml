@@ -1,0 +1,69 @@
+root: index
+subtrees:
+  - entries:
+      - file: introduction.md
+      - file: examples/quick-start.md
+
+  - caption: Installation
+    entries:
+      - file: installation/requirements.md
+      - file: installation/compatibility.md
+      - file: installation/liqoctl.md
+      - file: installation/install.md
+      - file: installation/uninstall.md
+
+  - caption: Examples
+    entries:
+      - file: examples/requirements.md
+      - file: examples/offloading-with-policies.md
+      - file: examples/replicated-deployments.md
+      - file: examples/service-offloading.md
+      - file: examples/stateful-applications.md
+
+  - caption: Features
+    entries:
+      - file: features/peering.md
+      - file: features/offloading.md
+      - file: features/network-fabric.md
+      - file: features/storage-fabric.md
+
+  - caption: Usage
+    entries:
+      - file: usage/peer.md
+      - file: usage/namespace-offloading.md
+      - file: usage/reflection.md
+      - file: usage/stateful-applications.md
+      - file: usage/prometheus-metrics.md
+      - file: usage/service-continuity.md
+
+  - caption: Advanced usage
+    entries:
+      - file: advanced/peering-strategies.md
+      - file: advanced/manual-peering.md
+        entries:
+          - file: advanced/peering/inter-cluster-network.md
+          - file: advanced/peering/inter-cluster-authentication.md
+          - file: advanced/peering/offloading-in-depth.md
+          - file: advanced/peering/peering-via-cr.md
+      - file: advanced/use-only-offloading.md
+      - file: advanced/enable-external-networking.md
+      - file: advanced/virtualnode-customizations.md
+      - file: advanced/kubernetes-api.md
+      - file: advanced/nat.md
+      - file: advanced/external-ip-remapping.md
+      - file: advanced/k8s-api-server-proxy.md
+
+  - caption: Contributing
+    entries:
+      - file: contributing/contributing.md
+
+  - caption: More
+    entries:
+      - file: faq/faq.md
+      - file: more/papers.md
+      - url: https://github.com/liqotech/liqo
+        title: GitHub Repository
+      - url: https://medium.com/the-liqo-blog
+        title: The Liqo Blog
+      - url: https://www.youtube.com/channel/UCYbWJMfwy3P6xT4JI_K84xw
+        title: Liqo on YouTube
