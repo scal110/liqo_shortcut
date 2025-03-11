@@ -165,6 +165,8 @@ func (r *VirtualNodeConnectionReconciler) executeLiqoctlConnect(ctx context.Cont
 		return "", fmt.Errorf("errore nell'inizializzazione della localFactory: %v", err)
 	}
 
+	localFactory.Namespace = ""
+
 	// Imposta la variabile d'ambiente KUBECONFIG e crea la factory per il cluster remoto
 	os.Setenv("KUBECONFIG", kubeconfigB)
 	remoteFactory := factory.NewForRemote()
@@ -172,6 +174,7 @@ func (r *VirtualNodeConnectionReconciler) executeLiqoctlConnect(ctx context.Cont
 		return "", fmt.Errorf("errore nell'inizializzazione della remoteFactory: %v", err)
 	}
 
+	remoteFactory.Namespace = ""
 	os.Setenv("KUBECONFIG", kubeconfigA)
 
 	// Crea le opzioni per il comando "network connect"
@@ -195,14 +198,6 @@ func (r *VirtualNodeConnectionReconciler) executeLiqoctlConnect(ctx context.Cont
 
 	localFactory.Printer = output.NewLocalPrinter(true, true)
 	remoteFactory.Printer = output.NewRemotePrinter(true, true)
-
-	fmt.Println("Informazioni localFactory:")
-	fmt.Printf("Namespace: %s\n", localFactory.Namespace)
-	fmt.Printf("RESTConfig: %+v\n\n", localFactory.RESTConfig)
-
-	fmt.Println("Informazioni remoteFactory:")
-	fmt.Printf("Namespace: %s\n", remoteFactory.Namespace)
-	fmt.Printf("RESTConfig: %+v\n\n", remoteFactory.RESTConfig)
 
 	fmt.Println("Esecuzione del comando 'network connect'...")
 	if err := opts.RunConnect(ctx); err != nil {
@@ -302,12 +297,16 @@ func (r *VirtualNodeConnectionReconciler) disconnectLiqoctl(ctx context.Context,
 		return fmt.Errorf("errore nell'inizializzazione della localFactory: %v", err)
 	}
 
+	localFactory.Namespace = fmt.Sprintf("liqo-tenant-%s", connection.Spec.VirtualNodeB)
+
 	// Imposta la variabile d'ambiente KUBECONFIG e crea la factory per il cluster remoto
 	os.Setenv("KUBECONFIG", kubeconfigB)
 	remoteFactory := factory.NewForRemote()
 	if err := remoteFactory.Initialize(); err != nil {
 		return fmt.Errorf("errore nell'inizializzazione della remoteFactory: %v", err)
 	}
+
+	remoteFactory.Namespace = fmt.Sprintf("liqo-tenant-%s", connection.Spec.VirtualNodeA)
 
 	os.Setenv("KUBECONFIG", kubeconfigA)
 
