@@ -20,13 +20,17 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
+	"github.com/liqotech/liqo/pkg/liqo-controller-manager/networking/forge"
+	"github.com/liqotech/liqo/pkg/liqoctl/factory"
+	"github.com/liqotech/liqo/pkg/liqoctl/network"
+	"github.com/liqotech/liqo/pkg/liqoctl/output"
 	networkingv1alpha1 "github.com/nates110/vnc-controller/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -136,41 +140,86 @@ func (r *VirtualNodeConnectionReconciler) Reconcile(ctx context.Context, req ctr
 
 // executeLiqoctlConnect esegue il comando "liqoctl network connect" utilizzando i kubeconfig recuperati
 func (r *VirtualNodeConnectionReconciler) executeLiqoctlConnect(ctx context.Context, connection *networkingv1alpha1.VirtualNodeConnection) (string, error) {
+	// Recupera il kubeconfig per VirtualNodeA
 	kubeconfigA, err := r.getKubeconfigFromLiqo(ctx, connection.Spec.VirtualNodeA)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("errore nel recupero del kubeconfig per VirtualNodeA: %v", err)
 	}
 	defer os.Remove(kubeconfigA)
 
+	// Recupera il kubeconfig per VirtualNodeB
 	kubeconfigB, err := r.getKubeconfigFromLiqo(ctx, connection.Spec.VirtualNodeB)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("errore nel recupero del kubeconfig per VirtualNodeB: %v", err)
 	}
 	defer os.Remove(kubeconfigB)
 
-	ctxCmd, cancel := context.WithTimeout(ctx, 60*time.Second)
+	// Crea un contesto con timeout
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctxCmd, "liqoctl", "network", "connect",
-		"--kubeconfig", kubeconfigA,
-		"--remote-kubeconfig", kubeconfigB,
-		"--gw-server-service-type=NodePort",
-		"--wait")
-
-	output, err := cmd.CombinedOutput()
-	log.FromContext(ctx).Info("Output di liqoctl connect:" + string(output))
-
-	if err != nil {
-		return string(output), fmt.Errorf("Errore eseguendo liqoctl connect: %v", err)
+	// Imposta la variabile d'ambiente KUBECONFIG e crea la factory per il cluster locale
+	os.Setenv("KUBECONFIG", kubeconfigA)
+	localFactory := factory.NewForLocal()
+	if err := localFactory.Initialize(); err != nil {
+		return "", fmt.Errorf("errore nell'inizializzazione della localFactory: %v", err)
 	}
 
-	return string(output), nil
+	// Imposta la variabile d'ambiente KUBECONFIG e crea la factory per il cluster remoto
+	os.Setenv("KUBECONFIG", kubeconfigB)
+	remoteFactory := factory.NewForRemote()
+	if err := remoteFactory.Initialize(); err != nil {
+		return "", fmt.Errorf("errore nell'inizializzazione della remoteFactory: %v", err)
+	}
+
+	os.Setenv("KUBECONFIG", kubeconfigA)
+
+	// Crea le opzioni per il comando "network connect"
+	opts := network.NewOptions(localFactory)
+	opts.RemoteFactory = remoteFactory
+	opts.ServerGatewayType = forge.DefaultGwServerType
+	opts.ServerTemplateName = forge.DefaultGwServerTemplateName // Nome del template
+	opts.ServerServiceType.Set("NodePort")
+	opts.ServerTemplateNamespace = "liqo"
+	opts.ServerServicePort = forge.DefaultGwServerPort
+	// Imposta i parametri per il Gateway Client, se necessario:
+	opts.ClientGatewayType = forge.DefaultGwClientType
+	opts.ClientTemplateName = forge.DefaultGwClientTemplateName
+	opts.ClientTemplateNamespace = "liqo"
+	// Parametri comuni
+	opts.MTU = forge.DefaultMTU
+	opts.DisableSharingKeys = false
+	// Timeout, wait, skip-validation e altri parametri possono essere impostati anch'essi:
+	opts.Timeout = 120 * time.Second
+	opts.Wait = true
+
+	localFactory.Printer = output.NewLocalPrinter(true, true)
+	remoteFactory.Printer = output.NewRemotePrinter(true, true)
+
+	fmt.Println("Informazioni localFactory:")
+	fmt.Printf("Namespace: %s\n", localFactory.Namespace)
+	fmt.Printf("RESTConfig: %+v\n\n", localFactory.RESTConfig)
+
+	fmt.Println("Informazioni remoteFactory:")
+	fmt.Printf("Namespace: %s\n", remoteFactory.Namespace)
+	fmt.Printf("RESTConfig: %+v\n\n", remoteFactory.RESTConfig)
+
+	fmt.Println("Esecuzione del comando 'network connect'...")
+	if err := opts.RunConnect(ctx); err != nil {
+		return "", fmt.Errorf("errore durante l'esecuzione di 'network connect': %v", err)
+	}
+
+	fmt.Println("Operazione 'network connect' completata con successo.")
+	return "Operazione 'network connect' completata con successo.", nil
 }
 
-// getKubeconfigFromLiqo recupera il kubeconfig dal Secret associato al virtual node
+// getKubeconfigFromLiqo recupera il kubeconfig dal Secret associato al virtual node,
+// ne modifica il namespace nel contesto corrente e lo salva in un file temporaneo.
 func (r *VirtualNodeConnectionReconciler) getKubeconfigFromLiqo(ctx context.Context, virtualNode string) (string, error) {
+	// Costruisce namespace e nome del secret in base al virtual node.
 	namespace := fmt.Sprintf("liqo-tenant-%s", virtualNode)
 	secretName := fmt.Sprintf("kubeconfig-controlplane-%s", virtualNode)
+
 	var secret corev1.Secret
 	if err := r.Get(ctx, client.ObjectKey{Namespace: namespace, Name: secretName}, &secret); err != nil {
 		return "", fmt.Errorf("Errore nel recupero del Secret %s nel namespace %s: %v", secretName, namespace, err)
@@ -181,8 +230,29 @@ func (r *VirtualNodeConnectionReconciler) getKubeconfigFromLiqo(ctx context.Cont
 		return "", fmt.Errorf("Il Secret %s non contiene la chiave 'kubeconfig'", secretName)
 	}
 
+	// Carica il kubeconfig YAML in memoria come oggetto Config.
+	config, err := clientcmd.Load(kubeconfigData)
+	if err != nil {
+		return "", fmt.Errorf("Errore nel parsing del kubeconfig: %v", err)
+	}
+
+	// Verifica che sia impostato un contesto corrente.
+	if config.CurrentContext == "" {
+		return "", fmt.Errorf("Il kubeconfig non ha un contesto corrente impostato")
+	}
+
+	// Modifica il namespace del contesto corrente con quello preso dal secret.
+	config.Contexts[config.CurrentContext].Namespace = ""
+
+	// Scrive l'oggetto Config modificato in YAML.
+	modifiedData, err := clientcmd.Write(*config)
+	if err != nil {
+		return "", fmt.Errorf("Errore nel marshalling del kubeconfig modificato: %v", err)
+	}
+
+	// Salva il kubeconfig modificato in un file temporaneo.
 	kubeconfigPath := filepath.Join(os.TempDir(), fmt.Sprintf("kubeconfig-%s.yaml", virtualNode))
-	if err := os.WriteFile(kubeconfigPath, kubeconfigData, 0600); err != nil {
+	if err := os.WriteFile(kubeconfigPath, modifiedData, 0600); err != nil {
 		return "", fmt.Errorf("Errore nella scrittura del file kubeconfig: %v", err)
 	}
 
@@ -222,25 +292,45 @@ func (r *VirtualNodeConnectionReconciler) disconnectLiqoctl(ctx context.Context,
 	}
 	defer os.Remove(kubeconfigB)
 
-	ctxCmd, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctxCmd, "liqoctl", "network", "reset",
-		"--kubeconfig", kubeconfigA,
-		"--remote-kubeconfig", kubeconfigB,
-		"--skip-confirm")
-
-	output, err := cmd.CombinedOutput()
-	logger.Info("Output di liqoctl disconnect", "output", string(output))
-
-	if err != nil {
-		logger.Error(err, "Errore durante la disconnessione")
-		return err
+	// Imposta la variabile d'ambiente KUBECONFIG e crea la factory per il cluster locale
+	os.Setenv("KUBECONFIG", kubeconfigA)
+	localFactory := factory.NewForLocal()
+	if err := localFactory.Initialize(); err != nil {
+		return fmt.Errorf("errore nell'inizializzazione della localFactory: %v", err)
 	}
 
-	logger.Info("Disconnessione completata", "nodeA", connection.Spec.VirtualNodeA, "nodeB", connection.Spec.VirtualNodeB)
+	// Imposta la variabile d'ambiente KUBECONFIG e crea la factory per il cluster remoto
+	os.Setenv("KUBECONFIG", kubeconfigB)
+	remoteFactory := factory.NewForRemote()
+	if err := remoteFactory.Initialize(); err != nil {
+		return fmt.Errorf("errore nell'inizializzazione della remoteFactory: %v", err)
+	}
 
+	os.Setenv("KUBECONFIG", kubeconfigA)
+
+	// Crea le opzioni per il comando "network connect"
+	opts := network.NewOptions(localFactory)
+	opts.RemoteFactory = remoteFactory
+	// Timeout, wait, skip-validation e altri parametri possono essere impostati anch'essi:
+	opts.Timeout = 120 * time.Second
+	opts.Wait = true
+	localFactory.Printer = output.NewLocalPrinter(true, true)
+	remoteFactory.Printer = output.NewRemotePrinter(true, true)
+
+	fmt.Println("Esecuzione del comando 'network reset'...")
+	if err := opts.RunReset(ctx); err != nil {
+		return fmt.Errorf("errore durante l'esecuzione di 'network connect': %v", err)
+	}
+
+	fmt.Println("Operazione 'network reset' completata con successo.")
 	return nil
+
+	//	logger.Info("Disconnessione completata", "nodeA", connection.Spec.VirtualNodeA, "nodeB", connection.Spec.VirtualNodeB)
+
+	// return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

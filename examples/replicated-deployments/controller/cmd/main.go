@@ -19,14 +19,19 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"os"
-	"path/filepath"
+	authv1beta1 "github.com/liqotech/liqo/apis/authentication/v1beta1"
+	liqov1beta1 "github.com/liqotech/liqo/apis/core/v1beta1"
+	ipamv1alpha1 "github.com/liqotech/liqo/apis/ipam/v1alpha1"
+	networkingv1beta1_1 "github.com/liqotech/liqo/apis/networking/v1beta1"
+	offloadingv1beta1 "github.com/liqotech/liqo/apis/offloading/v1beta1"
 
 	networkingv1beta1 "github.com/nates110/vnc-controller/api/v1beta1"
 	"github.com/nates110/vnc-controller/internal/controller"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"os"
+	"path/filepath"
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -49,6 +54,12 @@ func init() {
 
 	utilruntime.Must(networkingv1beta1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
+
+	utilruntime.Must(liqov1beta1.AddToScheme(clientgoscheme.Scheme))
+	utilruntime.Must(offloadingv1beta1.AddToScheme(clientgoscheme.Scheme))
+	utilruntime.Must(networkingv1beta1_1.AddToScheme(clientgoscheme.Scheme))
+	utilruntime.Must(ipamv1alpha1.AddToScheme(clientgoscheme.Scheme))
+	utilruntime.Must(authv1beta1.AddToScheme(clientgoscheme.Scheme))
 }
 
 // nolint:gocyclo
