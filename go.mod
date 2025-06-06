@@ -31,10 +31,10 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/virtual-kubelet/virtual-kubelet v1.11.0
 	github.com/vishvananda/netlink v1.2.1-beta.2
-	golang.org/x/mod v0.22.0
-	golang.org/x/sync v0.11.0
-	golang.org/x/sys v0.30.0
-	golang.org/x/text v0.22.0
+	golang.org/x/mod v0.25.0
+	golang.org/x/sync v0.15.0
+	golang.org/x/sys v0.33.0
+	golang.org/x/text v0.26.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20220504211119-3d4a969bb56b
 	gomodules.xyz/jsonpatch/v2 v2.4.0
 	google.golang.org/api v0.206.0
@@ -257,13 +257,13 @@ require (
 	go.opentelemetry.io/otel/metric v1.31.0 // indirect
 	go.opentelemetry.io/otel/trace v1.31.0 // indirect
 	go.starlark.net v0.0.0-20231121155337-90ade8b19d09 // indirect
-	golang.org/x/crypto v0.35.0 // indirect
+	golang.org/x/crypto v0.38.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
-	golang.org/x/net v0.35.0 // indirect
+	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect
-	golang.org/x/term v0.29.0 // indirect
+	golang.org/x/term v0.32.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
-	golang.org/x/tools v0.24.0 // indirect
+	golang.org/x/tools v0.33.0 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20220904105730-b51010ba13f0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241104194629-dd2ea8efbc28 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
